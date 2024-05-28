@@ -1,0 +1,7 @@
+/.venv
+/images_test
+/images_api/__pycache__
+/images_api/utils/__pycache__
+/images_api/conf/credentials.json
+/sql
+/Microservicios.ipynb

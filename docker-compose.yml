@@ -1,0 +1,24 @@
+version: '3.1'
+
+services:
+  server:
+    image: server_images:1.0.0
+    ports: 
+      - 80:80
+    environment:
+      CREDENTIALS_FILEPATH : ./images_api/conf/credentials.json
+    volumes:
+      - images:/images
+  db:
+    image: mysql_pictures:1.0.0
+    ports:
+      - 3306:3306
+    environment:
+      MYSQL_DATABASE: Pictures
+      MYSQL_ROOT_PASSWORD: mbit
+      MYSQL_USER: mbit
+      MYSQL_PASSWORD: mbit
+
+volumes:
+  images:
+    external: false
