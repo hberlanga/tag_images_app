@@ -27,21 +27,20 @@ def insert_pictures(conn, values):
 Consulta sobre la tabla pictures
 """
 def query_pictures(min_date, max_date, tags):
-    if tags:
-        query = "SELECT * FROM pictures p JOIN tags t ON p.id = t.picture_id"
-    else:
-        query = "SELECT * FROM pictures p"
+    query = ("SELECT p.id, p.size, p.date,GROUP_CONCAT(t.tag ORDER BY t.tag, t.confidence SEPARATOR ',') as g_tags,"+
+    "GROUP_CONCAT(t.confidence ORDER BY t.tag, t.confidence SEPARATOR ',') as g_confidences FROM pictures p JOIN tags t ON p.id = t.picture_id")
     if min_date or max_date:
         query = f'{query} WHERE'
         if min_date and max_date:
-            query = f'{query} "{min_date}" <= p.date >= "{max_date}"'
+            query = f'{query} p.date >= "{min_date}" AND p.date <= "{max_date}"'
         elif min_date and not max_date:
-            query = f'{query} " p.date >= "{min_date}"'
+            query = f'{query} p.date >= "{min_date}"'
         elif not min_date and max_date:
-            query = f'{query} " p.date <= "{max_date}"'
-    #if (min_date or max_date) and tags:
-    #     query = f'{query} AND t.tag IN ({",".join([f'"{x}"' for x in tags])})'    
-    print(f'Query => {query}')
+            query = f'{query} p.date <= "{max_date}"'
+    if tags:
+         concat_tags = ",".join([f'"{x}"' for x in tags])
+         query = f'{query} {"AND" if (min_date or max_date) else "WHERE"} t.picture_id IN (SELECT t2.picture_id FROM tags t2 WHERE t2.tag IN ({concat_tags}))'    
+    query = f'{query} GROUP BY t.picture_id'
     with engine.connect() as conn:
         result = conn.execute(text(query))
         columns = result.keys()
@@ -51,7 +50,9 @@ def query_pictures(min_date, max_date, tags):
         ]
 
 def get_picture(id):
-    query = f"SELECT * FROM pictures p JOIN tags t ON p.id = t.picture_id where p.id = '{id}'"
+    query = ("SELECT p.id, p.path,p.size,p.date,GROUP_CONCAT(t.tag ORDER BY t.tag, t.confidence SEPARATOR ',') as g_tags,"+
+    "GROUP_CONCAT(t.confidence ORDER BY t.tag, t.confidence SEPARATOR ',') as g_confidences FROM pictures p JOIN tags t ON p.id = t.picture_id")
+    query = f"{query} WHERE p.id = '{id}'"
     with engine.connect() as conn:
         result = conn.execute(text(query))
         columns = result.keys()

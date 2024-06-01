@@ -9,6 +9,8 @@ services:
       CREDENTIALS_FILEPATH : ./images_api/conf/credentials.json
     volumes:
       - images:/images
+    depends_on:
+      - db
   db:
     image: mysql_pictures:1.0.0
     ports:

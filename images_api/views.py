@@ -6,8 +6,6 @@ from . import controller
 
 bp = Blueprint('images', __name__, url_prefix='/api')
 
-ISO_DATE_MASK = '%Y-%m-%dT%H:%M:%S'
-
 def validate_post_image_request(request):
     if not request.is_json:
         raise TypeError("Request body should be JSON")
@@ -18,18 +16,17 @@ def validate_post_image_request(request):
     if base64.b64encode(base64.b64decode(data_bytes)) != data_bytes:
         raise ValueError("'data' value shoul be a valid base64 string")
     
-def validate_get_images_params(min_date, max_date, tags):
+def validate_get_images_params(min_date, max_date):
     if min_date is not None:
         validate_date_param(min_date)
     if max_date is not None:
         validate_date_param(max_date)
-    if tags and not isinstance(tags, list):
-        raise TypeError("Tags param should be a list of tags")
     
 def validate_date_param(str_date):
     try:
-        datetime.strptime(str_date, ISO_DATE_MASK)
-    except:
+        datetime.datetime.fromisoformat(str_date)
+    except Exception as e:
+        print(e)
         raise ValueError("Invalid date format")
     
 def validate_get_tags_params(min_date, max_date):
@@ -38,34 +35,33 @@ def validate_get_tags_params(min_date, max_date):
     if max_date is not None:
         validate_date_param(max_date)
     
-def group_tags_by_id(results):
-    tags_result = defaultdict(list)
-    final_result = defaultdict(dict)
-    id_set = set()
+def zip_tags(results, filter_tags):
+    final_result = []
     for row in results:
-        if row["id"] not in id_set:
-            id_set.add(row["id"])
-            final_result[row["id"]] = {
-                "id" : row["id"],
-                "size" : row["size"],
-                "date" : row["date"]
-            }
-        if "tag" in row:
-            tags_result[row["id"]].append({
-                "tag" : row["tag"],
-                "confidence" : row["confidence"]
-            })
-    for k in final_result:
-        if k in tags_result:
-            final_result[k]["tags"] = tags_result[k]
-    return [v for v in final_result.values()]  
+        tags = []
+        if row["g_tags"] is not None:
+            if filter_tags is not None and not set(filter_tags).issubset(row["g_tags"].split(",")):
+                continue
+            tags_confidences = zip(row["g_tags"].split(","),row["g_confidences"].split(","))
+            for tag,confidence in tags_confidences:
+                tags.append({
+                    "tag" : tag,
+                    "confidence" : confidence
+                })
+        final_result.append({
+            "id" : row["id"],
+            "size" : row["size"],
+            "date" : row["date"],
+            "tags" :  tags
+        })
+    return final_result 
 
 @bp.post("/images")
 def post_image():
     try:
         validate_post_image_request(request)
     except Exception as e:
-        make_response({
+        return make_response({
             "message" : str(e)
         },400)
     min_confidence = int(request.args.get("min_confidence", "80"))
@@ -86,22 +82,23 @@ def post_image():
 def get_images():
     min_date = request.args.get("min_date")
     max_date = request.args.get("max_date")
-    tags = request.args.get("tags")
+    tags = request.args.get("tags","")
     try:
-        validate_get_images_params(min_date, max_date, tags)
+        validate_get_images_params(min_date, max_date)
     except Exception as e:
-        make_response({
+        return make_response({
             "message" : str(e)
         },400)
+    tags = tags.split(",") if len(tags) > 0 else None
     results = controller.process_get_images(min_date, max_date, tags)
-    return group_tags_by_id(results)
+    return zip_tags(results, tags)
 
 @bp.get("/images/<id>")
 def get_image(id):
     image = controller.process_get_image(id)
     if image is not None:
         (result, b64_img) = image
-        response = group_tags_by_id(result)[0]
+        response = zip_tags(result, None)[0]
         response["data"] = b64_img
         return response
     else:
@@ -117,7 +114,7 @@ def get_tags():
     try:
         validate_get_tags_params(min_date, max_date)
     except Exception as e:
-        make_response({
+        return make_response({
             "message" : str(e)
         },400)
     return controller.process_get_tags(min_date, max_date)
